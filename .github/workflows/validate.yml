@@ -1,0 +1,76 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly at 03:00 UTC — GPU tier (if self-hosted runners available)
+    - cron: "0 3 * * *"
+
+jobs:
+  # PR CI: CPU-only, free tier
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workload: [pytorch, huggingface, scan-only, lightning, ray, distributed]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ matrix.workload }}" = "scan-only" ]; then
+            pip install -e ".[pytorch]"
+          elif [ "${{ matrix.workload }}" = "distributed" ]; then
+            pip install -e ".[distributed]"
+          else
+            pip install -e ".[${{ matrix.workload }}]"
+          fi
+
+      - name: Run validation
+        env:
+          ALLOC_TOKEN: ${{ secrets.ALLOC_TOKEN }}
+        run: make ${{ matrix.workload }} VENV_BIN="$(dirname "$(which alloc)")"
+
+  # Nightly: GPU tier (only on schedule, skips if no GPU)
+  validate-gpu:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest  # Replace with self-hosted GPU runner when available
+    strategy:
+      fail-fast: false
+      matrix:
+        workload: [pytorch, huggingface]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[${{ matrix.workload }}]"
+
+      - name: Check for GPU
+        id: gpu
+        run: |
+          if python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No GPU detected — skipping GPU validation"
+          fi
+
+      - name: Run GPU validation
+        if: steps.gpu.outputs.available == 'true'
+        env:
+          ALLOC_TOKEN: ${{ secrets.ALLOC_TOKEN }}
+        run: make ${{ matrix.workload }} VENV_BIN="$(dirname "$(which alloc)")"

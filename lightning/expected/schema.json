@@ -1,0 +1,40 @@
+{
+  "free": {
+    "keys": ["version", "timestamp", "probe", "hardware", "context"],
+    "paths": [
+      "probe.peak_vram_mb",
+      "probe.avg_gpu_util",
+      "probe.duration_seconds",
+      "probe.samples",
+      "probe.stop_reason",
+      "probe.step_count",
+      "hardware.gpu_name",
+      "hardware.gpu_total_vram_mb",
+      "hardware.driver_version",
+      "hardware.cuda_version",
+      "hardware.sm_version",
+      "hardware.num_gpus_detected"
+    ],
+    "non_null": [
+      "version",
+      "timestamp",
+      "probe",
+      "hardware",
+      "probe.stop_reason",
+      "probe.step_count",
+      "hardware.num_gpus_detected"
+    ],
+    "types": {
+      "probe.peak_vram_mb": "number",
+      "probe.avg_gpu_util": "number",
+      "probe.duration_seconds": "number",
+      "probe.samples": "array",
+      "probe.stop_reason": "string",
+      "probe.step_count": "integer",
+      "hardware.num_gpus_detected": "integer"
+    }
+  },
+  "full": {
+    "keys": ["ghost"]
+  }
+}

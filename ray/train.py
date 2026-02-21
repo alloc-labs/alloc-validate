@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""Ray Train workload using TorchTrainer.
+
+Trains a configurable model on randomly generated 32x32 images for a few steps
+using Ray Train's TorchTrainer. Single worker (no cluster required).
+Fully deterministic (seeded), no downloads, completes in < 60s on CPU.
+
+Signature scenario: Ray Train wrapping — validates that `alloc run` correctly
+profiles a Ray Train script and produces a valid artifact.
+
+No alloc callback integration — Ray doesn't have a dedicated callback.
+The value is proving `alloc run` wraps Ray Train correctly.
+
+Usage:
+    alloc run -- python ray/train.py
+    alloc run -- python ray/train.py --model medium-cnn --max-steps 50
+"""
+
+from __future__ import annotations
+
+import argparse
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+
+import ray.train
+from ray.train import ScalingConfig
+from ray.train.torch import TorchTrainer
+
+
+# ---------------------------------------------------------------------------
+# Model definitions (same architectures as pytorch/ workload)
+# ---------------------------------------------------------------------------
+
+
+class SmallCNN(nn.Module):
+    """Minimal CNN for 10-class image classification (~26K params)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 16, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(32 * 8 * 8, 128),
+            nn.ReLU(),
+            nn.Linear(128, 10),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.classifier(self.features(x))
+
+
+class MediumCNN(nn.Module):
+    """4 conv layers, wider channels (~200K params)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 32, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 8 * 8, 128),
+            nn.ReLU(),
+            nn.Linear(128, 10),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.classifier(self.features(x))
+
+
+class MLPModel(nn.Module):
+    """3-layer MLP (~50K params)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(3 * 32 * 32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 16),
+            nn.ReLU(),
+            nn.Linear(16, 10),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layers(x)
+
+
+MODEL_REGISTRY: dict[str, type[nn.Module]] = {
+    "small-cnn": SmallCNN,
+    "medium-cnn": MediumCNN,
+    "mlp": MLPModel,
+}
+
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+
+
+def make_synthetic_data(n_samples: int = 2048) -> TensorDataset:
+    """Generate synthetic 32x32 RGB images and random labels."""
+    gen = torch.Generator().manual_seed(42)
+    images = torch.randn(n_samples, 3, 32, 32, generator=gen)
+    labels = torch.randint(0, 10, (n_samples,), generator=gen)
+    return TensorDataset(images, labels)
+
+
+# ---------------------------------------------------------------------------
+# Ray Train function
+# ---------------------------------------------------------------------------
+
+
+def train_func(config: dict) -> None:
+    """Training function executed by each Ray Train worker."""
+    model_name = config["model"]
+    max_steps = config["max_steps"]
+    batch_size = config["batch_size"]
+    seed = config["seed"]
+
+    torch.manual_seed(seed)
+
+    model_cls = MODEL_REGISTRY[model_name]
+    model = model_cls()
+    model = ray.train.torch.prepare_model(model)
+
+    param_count = sum(p.numel() for p in model.parameters())
+    print(f"Model: {model_name} ({model_cls.__name__}) | Params: {param_count:,}")
+
+    dataset = make_synthetic_data()
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    loader = ray.train.torch.prepare_data_loader(loader)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+    step = 0
+    model.train()
+    while step < max_steps:
+        for inputs, targets in loader:
+            if step >= max_steps:
+                break
+
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+            step += 1
+            if step % 20 == 0:
+                ray.train.report({"loss": loss.item(), "step": step})
+                print(f"Step {step}/{max_steps} | Loss: {loss.item():.4f}")
+
+    print(f"Training complete. {step} steps.")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--max-steps", type=int, default=100, help="Max training steps")
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--model",
+        choices=list(MODEL_REGISTRY),
+        default="small-cnn",
+        help="Model architecture to train",
+    )
+    parser.add_argument("--num-gpus", type=int, default=1, help="Number of GPUs (informational)")
+    args = parser.parse_args()
+
+    torch.manual_seed(args.seed)
+    print(f"Num GPUs (metadata): {args.num_gpus}")
+
+    trainer = TorchTrainer(
+        train_loop_per_worker=train_func,
+        train_loop_config={
+            "model": args.model,
+            "max_steps": args.max_steps,
+            "batch_size": args.batch_size,
+            "seed": args.seed,
+        },
+        scaling_config=ScalingConfig(
+            num_workers=1,
+            use_gpu=torch.cuda.is_available(),
+        ),
+    )
+
+    trainer.fit()
+    print("Ray Train complete.")
+
+
+if __name__ == "__main__":
+    main()

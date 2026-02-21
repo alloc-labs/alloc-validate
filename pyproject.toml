@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alloc-validate"
+version = "0.1.0"
+description = "Reference ML training scripts that validate the alloc CLI across common frameworks"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = [
+    "alloc",
+]
+
+[project.optional-dependencies]
+pytorch = [
+    "torch>=2.0",
+]
+huggingface = [
+    "torch>=2.0",
+    "transformers>=4.30",
+    "datasets>=2.14",
+    "accelerate>=0.21",
+]
+lightning = [
+    "torch>=2.0",
+    "lightning>=2.0",
+]
+ray = [
+    "torch>=2.0",
+    "ray[train]>=2.9",
+]
+distributed = [
+    "torch>=2.0",
+]
+all = [
+    "alloc-validate[pytorch,huggingface,lightning,ray,distributed]",
+]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pytest>=8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.setuptools]
+packages = []
