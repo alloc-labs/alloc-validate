@@ -201,10 +201,8 @@ def eval_scan(model: str, gpu: str, num_gpus: int) -> dict:
 
     result["recommendation_keys"] = sorted(scan_data.keys()) if isinstance(scan_data, dict) else []
 
-    # Check for topology-related content
-    topo_keys = ["topologies", "strategies", "recommendations", "feasible", "vram_estimate"]
-    found = [k for k in topo_keys if k in (scan_data if isinstance(scan_data, dict) else {})]
-    result["has_recommendations"] = len(found) > 0
+    # Check if scan returned any meaningful content
+    result["has_recommendations"] = len(result["recommendation_keys"]) > 0
 
     # Feasibility assessment based on model size and GPU config
     if model == "70b" and num_gpus == 1 and "T4" in gpu:

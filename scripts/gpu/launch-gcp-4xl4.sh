@@ -6,8 +6,8 @@ set -euo pipefail
 # Uses Spot VM by default (--provisioning-model=SPOT). ~70% cheaper than on-demand.
 # Set GCP_ON_DEMAND=1 to use on-demand instead.
 #
-# Tests: DDP process-tree discovery, multi-GPU VRAM reporting, strategy planner
-# topology recommendations (DDP, FSDP feasibility).
+# Tests: DDP process-tree discovery, multi-GPU VRAM reporting, distributed
+# topology validation (DDP, FSDP feasibility).
 #
 # Prerequisites:
 #   - gcloud CLI installed and authenticated (gcloud auth login)

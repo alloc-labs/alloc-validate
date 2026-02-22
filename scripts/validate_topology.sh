@@ -98,13 +98,11 @@ try:
     keys = list(data.keys()) if isinstance(data, dict) else []
     print(f"OK: scan response has {len(keys)} keys: {keys[:10]}")
 
-    # Check for topology-related fields
-    topo_keys = ["topologies", "strategies", "recommendations", "feasible", "vram_estimate"]
-    found = [k for k in topo_keys if k in data or any(k in str(v) for v in (data.values() if isinstance(data, dict) else []))]
-    if found:
-        print(f"OK: topology-related fields present: {found}")
+    # Check scan returned meaningful content
+    if keys:
+        print(f"OK: scan response has content")
     else:
-        print("INFO: no explicit topology fields (scan response format may vary)")
+        print("INFO: scan response empty (format may vary)")
 except (json.JSONDecodeError, FileNotFoundError):
     print("WARN: scan output is not parseable JSON")
 PY

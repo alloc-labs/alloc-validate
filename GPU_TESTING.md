@@ -4,7 +4,7 @@ Running alloc-validate on real GPUs to fine-tune analysis accuracy, verify VRAM 
 
 ## Why GPU Tests Matter
 
-CPU-only CI proves the contract (artifact structure, callback integration, CLI correctness). GPU tests prove the **product** (VRAM estimates match reality, bottleneck classification is accurate, config scoring picks the right GPU, timing metrics are meaningful).
+CPU-only CI proves the contract (artifact structure, callback integration, CLI correctness). GPU tests prove the **product** (VRAM estimates match reality, bottleneck classification is accurate, GPU recommendations are sensible, timing metrics are meaningful).
 
 ## Recommended GPU Instances
 
@@ -20,7 +20,7 @@ Keep costs low. We need real GPU metrics, not massive compute -- small models on
 
 **Pick one.** GCP L4 or AWS T4 are the cheapest options. A single 1-GPU instance running the full matrix takes < 10 minutes and costs < $0.15.
 
-### Tier 2: Multi-GPU (use for strategy planner validation)
+### Tier 2: Multi-GPU (use for distributed strategy validation)
 
 | Provider | Instance | GPUs | GPU Type | VRAM | On-Demand Cost | Spot Cost |
 |----------|----------|------|----------|------|----------------|-----------|
@@ -28,7 +28,7 @@ Keep costs low. We need real GPU metrics, not massive compute -- small models on
 | AWS | g4dn.12xlarge | 4x T4 | T4 | 4x 16 GB | ~$3.91/hr | ~$1.17/hr |
 | Lambda Labs | gpu_4x_a10 | 4x A10 | A10 | 4x 24 GB | ~$3.00/hr | N/A |
 
-Multi-GPU validates: DDP process-tree discovery, multi-GPU VRAM reporting, strategy planner topology recommendations (DDP, FSDP feasibility). Full matrix on 4 GPUs takes < 15 minutes, costs < $1.
+Multi-GPU validates: DDP process-tree discovery, multi-GPU VRAM reporting, and distributed topology recommendations (DDP, FSDP feasibility). Full matrix on 4 GPUs takes < 15 minutes, costs < $1.
 
 ### Tier 3: High-end (use sparingly, for calibration)
 

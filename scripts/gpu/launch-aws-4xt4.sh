@@ -4,8 +4,8 @@ set -euo pipefail
 # Launch an AWS g4dn.12xlarge (4x T4, 4x16GB VRAM) for multi-GPU validation.
 # On-demand: ~$3.91/hr. Full test cycle takes < 15 min → ~$1.00/run.
 #
-# Tests: DDP process-tree discovery, multi-GPU VRAM reporting, strategy planner
-# topology recommendations (DDP, FSDP feasibility).
+# Tests: DDP process-tree discovery, multi-GPU VRAM reporting, distributed
+# topology validation (DDP, FSDP feasibility).
 #
 # Prerequisites:
 #   - AWS CLI configured (aws configure)

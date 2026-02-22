@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Validates `alloc upload` and the analysis pipeline (bottleneck classification,
-# recommendations, config scoring). Requires ALLOC_TOKEN.
+# Validates `alloc upload` and the analysis pipeline. Requires ALLOC_TOKEN.
 #
-# Tests signal level progression:
-# - NVML_ONLY: artifact from pytorch (no callback)
-# - FRAMEWORK_TIMING: artifact from huggingface/lightning (with callback)
+# Uploads artifacts from three workloads:
+# - pytorch (no callback)
+# - huggingface (with callback)
+# - lightning (with callback)
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -34,9 +34,9 @@ fi
 
 echo "ALLOC_TOKEN set — running upload validation"
 
-# --- Upload pytorch artifact (NVML_ONLY signal level) ---
+# --- Upload pytorch artifact (no callback) ---
 echo ""
-echo "--- upload pytorch artifact (NVML_ONLY) ---"
+echo "--- upload pytorch artifact ---"
 cd "$REPO_ROOT/pytorch"
 
 # Generate fresh artifact if missing
@@ -51,14 +51,14 @@ if [ ! -f "$ARTIFACT" ]; then
 fi
 
 if "$ALLOC_BIN" upload "$ARTIFACT" 2>&1; then
-    echo "OK: alloc upload succeeded (pytorch / NVML_ONLY)"
+    echo "OK: alloc upload succeeded (pytorch)"
 else
     echo "WARN: alloc upload exited non-zero (pytorch)"
 fi
 
-# --- Upload huggingface artifact (FRAMEWORK_TIMING signal level) ---
+# --- Upload huggingface artifact (with callback) ---
 echo ""
-echo "--- upload huggingface artifact (FRAMEWORK_TIMING) ---"
+echo "--- upload huggingface artifact ---"
 cd "$REPO_ROOT/huggingface"
 
 if [ ! -f "alloc_artifact.json.gz" ] && [ ! -f "alloc_artifact.json" ]; then
@@ -72,14 +72,14 @@ if [ ! -f "$ARTIFACT" ]; then
 fi
 
 if "$ALLOC_BIN" upload "$ARTIFACT" 2>&1; then
-    echo "OK: alloc upload succeeded (huggingface / FRAMEWORK_TIMING)"
+    echo "OK: alloc upload succeeded (huggingface)"
 else
     echo "WARN: alloc upload exited non-zero (huggingface)"
 fi
 
-# --- Upload lightning artifact (FRAMEWORK_TIMING signal level) ---
+# --- Upload lightning artifact (with callback) ---
 echo ""
-echo "--- upload lightning artifact (FRAMEWORK_TIMING) ---"
+echo "--- upload lightning artifact ---"
 cd "$REPO_ROOT/lightning"
 
 if [ ! -f "alloc_artifact.json.gz" ] && [ ! -f "alloc_artifact.json" ]; then
@@ -93,7 +93,7 @@ if [ ! -f "$ARTIFACT" ]; then
 fi
 
 if "$ALLOC_BIN" upload "$ARTIFACT" 2>&1; then
-    echo "OK: alloc upload succeeded (lightning / FRAMEWORK_TIMING)"
+    echo "OK: alloc upload succeeded (lightning)"
 else
     echo "WARN: alloc upload exited non-zero (lightning)"
 fi
@@ -102,4 +102,4 @@ cd "$REPO_ROOT"
 
 echo ""
 echo "=== upload + analysis validation complete ==="
-echo "Check the dashboard for bottleneck classification and recommendations."
+echo "Check the dashboard for analysis and recommendations."
