@@ -106,6 +106,89 @@ alloc run -- torchrun --nproc_per_node=1 distributed/train_tp.py --model small
 
 Hybrid strategies are also available: `train_tp_dp.py`, `train_pp_dp.py`, `train_3d.py` (TP+PP+DP), and `train_3d_fsdp.py` (TP+PP+FSDP).
 
+## Running on a GPU
+
+The quickstart commands work on CPU and produce a valid artifact, but GPU metrics (peak VRAM, GPU utilization, power draw) will be zeros or absent. To get real measurements, run on a machine with an NVIDIA GPU.
+
+### What to expect
+
+| Environment | What you get |
+|---|---|
+| **CPU only** | Valid artifact structure, but GPU metrics are zeros. Good for trying the CLI. |
+| **GPU** | Real peak VRAM (MB), GPU utilization (%), power draw (W), hardware detection. |
+| **GPU + callbacks** (HF/Lightning) | All of the above, plus step timing p50/p90, throughput (samples/sec), dataloader wait %. |
+| **GPU + login** | All of the above, auto-uploaded to the [Alloc dashboard](https://www.alloclabs.com) for analysis and right-sizing. |
+
+### Local NVIDIA GPU
+
+If you have a local GPU (RTX 3090, 4090, A6000, etc.), the exact same quickstart commands produce real metrics automatically — no extra setup:
+
+```bash
+source .venv/bin/activate
+alloc run -- python pytorch/train.py --model large-cnn    # real VRAM + utilization
+alloc run -- python huggingface/train.py --model gpt2-tiny # adds step timing via callback
+```
+
+Verify your GPU is detected:
+
+```bash
+python -c "import torch; print(torch.cuda.get_device_name(0))"
+```
+
+### Cloud GPU via GCP
+
+If you don't have a local GPU, the fastest path is a GCP spot instance. A full test cycle takes under 10 minutes and costs ~$0.04.
+
+**Step 1 — Set up GCP (one-time):**
+
+```bash
+make setup-gcp
+```
+
+This interactive wizard installs the `gcloud` CLI if needed, authenticates, creates or selects a project, enables the Compute Engine API, and checks GPU quota. It's idempotent — re-run anytime to verify your setup.
+
+**Step 2 — Launch a spot GPU instance:**
+
+```bash
+bash scripts/gpu/launch-gcp-l4.sh       # 1x L4 (24 GB VRAM, ~$0.21/hr spot)
+```
+
+The instance clones this repo, installs dependencies, runs the validation suite, and **auto-deletes** when done.
+
+**Step 3 — Check progress:**
+
+```bash
+gcloud compute ssh alloc-validate-l4 --zone=us-central1-a \
+  --command 'tail -f /var/log/alloc-validate.log'
+```
+
+To delete the instance early: `gcloud compute instances delete alloc-validate-l4 --zone=us-central1-a --quiet`
+
+### AWS
+
+AWS GPU instances are also supported:
+
+```bash
+bash scripts/gpu/launch-aws-t4.sh       # 1x T4 (16 GB VRAM, ~$0.16/hr spot)
+```
+
+### Multi-GPU and advanced testing
+
+For distributed strategy validation (DDP, FSDP, TP, PP) and cost tables across instance types, see [GPU_TESTING.md](GPU_TESTING.md).
+
+## Authentication & Dashboard
+
+Everything above works without authentication — results stay local. To see your runs on the dashboard with analysis, right-sizing suggestions, and cost savings, log in:
+
+```bash
+alloc login --browser                    # opens browser for Google/Microsoft sign-in
+alloc run -- python pytorch/train.py     # auto-uploads when logged in
+```
+
+Once logged in, every `alloc run` automatically uploads the artifact. Your runs appear at [alloclabs.com](https://www.alloclabs.com) with GPU utilization, VRAM breakdown, bottleneck diagnosis, right-sizing recommendations, and cost analysis.
+
+Use `--no-upload` to skip auto-upload for a specific run, or `alloc upload <artifact>` to upload a previous artifact manually.
+
 ## Available Workloads
 
 All scripts accept `--model`, `--max-steps`, `--batch-size`, and `--seed` flags.
@@ -118,41 +201,6 @@ All scripts accept `--model`, `--max-steps`, `--batch-size`, and `--seed` flags.
 | Ray | `ray/train.py` | `small-cnn` (default), `medium-cnn`, `mlp` |
 | Distributed | `distributed/train_*.py` | `small` (default), `medium`, `large`, `xl` |
 | Ghost targets | `scan-only/ghost_target*.py` | 6 standalone model files for `alloc ghost` |
-
-## Authentication & Dashboard
-
-Everything above works without authentication. To see your runs on the dashboard with analysis, right-sizing suggestions, and auto-proposals, log in:
-
-```bash
-alloc login --browser    # opens browser for Google/Microsoft sign-in
-alloc run -- python pytorch/train.py   # auto-uploads when logged in
-```
-
-Once logged in, every `alloc run` automatically uploads the artifact. Your runs appear at [alloclabs.com](https://www.alloclabs.com) with GPU utilization, VRAM breakdown, bottleneck diagnosis, right-sizing recommendations, and cost analysis.
-
-Use `--no-upload` to skip auto-upload for a specific run, or `alloc upload <artifact>` to upload a previous artifact manually.
-
-For CI or non-interactive environments, set the token as an environment variable:
-
-```bash
-export ALLOC_TOKEN=<your-token>
-```
-
-## GPU Testing
-
-CPU tests validate the artifact contract. GPU tests validate real VRAM measurements, bottleneck classification, and timing metrics.
-
-```bash
-# GCP
-bash scripts/gpu/launch-gcp-l4.sh       # 1x L4 (~$0.21/hr spot)
-bash scripts/gpu/launch-gcp-4xl4.sh     # 4x L4 (~$0.84/hr spot)
-
-# AWS
-bash scripts/gpu/launch-aws-t4.sh       # 1x T4 (~$0.16/hr spot)
-bash scripts/gpu/launch-aws-4xt4.sh     # 4x T4 (~$1.17/hr spot)
-```
-
-See [GPU_TESTING.md](GPU_TESTING.md) for instance recommendations, cost estimates, and multi-GPU topology testing.
 
 <details>
 <summary><h2>Contributing</h2></summary>

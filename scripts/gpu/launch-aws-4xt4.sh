@@ -13,7 +13,6 @@ set -euo pipefail
 #   - Key pair created (or set KEY_NAME below)
 #
 # Usage:
-#   export ALLOC_TOKEN=<your-token>
 #   bash scripts/gpu/launch-aws-4xt4.sh
 #
 # The instance auto-terminates after tests complete.

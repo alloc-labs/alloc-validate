@@ -12,7 +12,6 @@ set -euo pipefail
 #   - Compute Engine API enabled
 #
 # Usage:
-#   export ALLOC_TOKEN=<your-token>
 #   bash scripts/gpu/launch-gcp-l4.sh
 #
 # The instance auto-deletes after tests complete.

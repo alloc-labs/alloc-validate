@@ -16,7 +16,6 @@ set -euo pipefail
 #   - GPU quota for L4 in the target zone
 #
 # Usage:
-#   export ALLOC_TOKEN=<your-token>
 #   bash scripts/gpu/launch-gcp-4xl4.sh
 #
 # The instance auto-deletes after tests complete.

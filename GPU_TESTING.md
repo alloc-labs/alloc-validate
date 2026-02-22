@@ -54,11 +54,7 @@ python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.
 # 3. Run free-tier validation (no token needed)
 make validate-free
 
-# 4. Run full validation with token (uploads to dashboard)
-export ALLOC_TOKEN=<your-token>
-make validate-full
-
-# 5. Run full matrix with all model/GPU combos
+# 4. Run full matrix with all model/GPU combos
 make matrix
 
 # 6. Multi-GPU matrix (on 4-GPU instances)
@@ -130,7 +126,7 @@ On 4-GPU instances, verify:
 5. **Use the Docker image on GPU instances** to avoid dependency setup time:
    ```bash
    make docker-build
-   docker run --rm --gpus all -e ALLOC_TOKEN=$ALLOC_TOKEN alloc-validate make validate-full
+   docker run --rm --gpus all alloc-validate make validate-free
    ```
 
 ## Distributed Topology Testing

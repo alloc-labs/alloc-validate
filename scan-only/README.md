@@ -25,7 +25,7 @@ Six standalone target scripts for `alloc ghost`:
 Each file is self-contained (model definition + forward/backward pass) since
 `alloc ghost` takes a script path and doesn't pass CLI args through.
 
-## Scan Combos (requires ALLOC_TOKEN)
+## Scan Combos (requires authentication)
 
 The validate script loops over:
 - **GPUs**: A100-80GB, H100-80GB, T4-16GB, V100-32GB
@@ -46,8 +46,7 @@ Total: 24 scan combos with 0.5s delay between API calls.
 alloc ghost scan-only/ghost_target.py
 alloc ghost scan-only/ghost_target_large_cnn.py
 
-# Remote scan (requires token)
-export ALLOC_TOKEN=your-token
+# Remote scan (requires authentication — see alloc login)
 alloc scan --model llama-3-8b --gpu A100-80GB
 alloc scan --model llama-3-70b --gpu H100-80GB --num-gpus 4
 
@@ -61,5 +60,5 @@ python scripts/run_matrix.py --framework scan-only
 ## Auth
 
 - `alloc ghost` is fully local, no token required
-- `alloc scan` calls the Alloc API, requires `ALLOC_TOKEN`
+- `alloc scan` calls the Alloc API, requires authentication (`alloc login`)
 - `validate.sh` skips remote scan gracefully when no token is set
