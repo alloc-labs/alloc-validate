@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workload: [pytorch, huggingface, scan-only, lightning, ray, distributed]
+        workload: [pytorch, huggingface, scan-only, lightning, ray, distributed, case-study, diagnose-targets]
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,8 @@ jobs:
             pip install -e ".[pytorch]"
           elif [ "${{ matrix.workload }}" = "distributed" ]; then
             pip install -e ".[distributed]"
+          elif [ "${{ matrix.workload }}" = "case-study" ] || [ "${{ matrix.workload }}" = "diagnose-targets" ]; then
+            pip install -e ".[pytorch,dev]"
           else
             pip install -e ".[${{ matrix.workload }}]"
           fi
@@ -39,6 +41,38 @@ jobs:
         env:
           ALLOC_TOKEN: ${{ secrets.ALLOC_TOKEN }}
         run: make ${{ matrix.workload }} VENV_BIN="$(dirname "$(which alloc)")"
+
+  # pytest suite: fast tests (no training, no GPU)
+  test-quick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[pytorch,dev]"
+
+      - name: Run quick tests
+        run: make test-quick VENV_BIN="$(dirname "$(which alloc)")"
+
+  # pytest suite: full tests including training (no GPU)
+  test-full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[all,dev]"
+
+      - name: Run full test suite
+        run: make test VENV_BIN="$(dirname "$(which alloc)")"
 
   # Nightly: GPU tier (only on schedule, skips if no GPU)
   validate-gpu:

@@ -239,6 +239,10 @@ mypy scripts/
 | `make matrix-quick` | 1 model per framework (smoke test) |
 | `make docker-build` | Build Docker image |
 | `make docker-test` | Run free-tier validation in Docker |
+| `make test` | Run full pytest suite |
+| `make test-diagnose` | Diagnose tests only |
+| `make test-callbacks` | Callback tests only |
+| `make test-quick` | Fast tests (no training): CLI, diagnose, ghost, schema |
 | `make clean` | Remove generated artifacts |
 | `make setup` | Create venv + install deps (`bootstrap.py`) |
 
@@ -249,6 +253,23 @@ alloc-validate/
 ├── pyproject.toml              # Dependencies (extras per workload)
 ├── Makefile                    # Task orchestration
 ├── Dockerfile                  # Reproducible CI/local runs
+├── tests/                      # pytest suite (new)
+│   ├── conftest.py             # Shared fixtures
+│   ├── test_cli_smoke.py       # version, whoami, catalog
+│   ├── test_diagnose.py        # alloc diagnose on all targets
+│   ├── test_ghost.py           # alloc ghost on scan-only targets
+│   ├── test_run.py             # alloc run on each framework
+│   ├── test_callbacks.py       # Callback-only artifact generation
+│   ├── test_scan.py            # alloc scan (requires ALLOC_TOKEN)
+│   ├── test_artifact_contract.py  # Schema validation
+│   └── test_config.py          # .alloc.yaml + catalog
+├── diagnose-targets/           # Scripts designed to trigger specific rules (new)
+│   ├── dl_issues.py            # Triggers DL001-DL004
+│   ├── precision_issues.py     # Triggers PREC001
+│   ├── memory_issues.py        # Triggers MEM002, MEM005
+│   ├── dist_issues.py          # Triggers DIST005
+│   ├── clean_script.py         # Should produce ZERO findings
+│   └── hf_trainer_issues.py    # HF Trainer without optimizations
 ├── scripts/
 │   ├── check_artifact.py       # Shared artifact validator
 │   ├── run_matrix.py           # Model/GPU variation matrix runner

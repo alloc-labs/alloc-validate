@@ -1,4 +1,4 @@
-.PHONY: all check-env setup pytorch huggingface scan-only lightning ray distributed validate-free validate-full validate-fleet validate-upload validate-topology docker-build docker-test matrix matrix-quick matrix-pytorch matrix-huggingface matrix-scan matrix-distributed eval-recommendations eval-recommendations-full baseline clean setup-gcp
+.PHONY: all check-env setup pytorch huggingface scan-only lightning ray distributed case-study diagnose-targets validate-free validate-full validate-fleet validate-upload validate-topology docker-build docker-test matrix matrix-quick matrix-pytorch matrix-huggingface matrix-scan matrix-distributed eval-recommendations eval-recommendations-full baseline clean setup-gcp test test-diagnose test-callbacks test-quick
 
 VENV_BIN ?= $(CURDIR)/.venv/bin
 ALLOC_BIN ?= $(VENV_BIN)/alloc
@@ -28,6 +28,12 @@ ray: check-env
 
 distributed: check-env
 	cd distributed && ALLOC_BIN="$(ALLOC_BIN)" PYTHON_BIN="$(PYTHON_BIN)" bash validate.sh ddp
+
+case-study: check-env
+	$(PYTHON_BIN) -m pytest tests/test_case_study.py -v
+
+diagnose-targets: check-env
+	$(PYTHON_BIN) -m pytest tests/test_diagnose.py -v
 
 validate-topology: check-env
 	ALLOC_BIN="$(ALLOC_BIN)" PYTHON_BIN="$(PYTHON_BIN)" bash scripts/validate_topology.sh
@@ -78,6 +84,18 @@ eval-recommendations-full: check-env
 
 baseline: check-env
 	ALLOC_BIN="$(ALLOC_BIN)" PYTHON_BIN="$(PYTHON_BIN)" bash scripts/record_baseline.sh
+
+test: check-env
+	$(PYTHON_BIN) -m pytest tests/ -v
+
+test-diagnose: check-env
+	$(PYTHON_BIN) -m pytest tests/test_diagnose.py -v
+
+test-callbacks: check-env
+	$(PYTHON_BIN) -m pytest tests/test_callbacks.py -v
+
+test-quick: check-env
+	$(PYTHON_BIN) -m pytest tests/test_cli_smoke.py tests/test_ghost.py tests/test_diagnose.py tests/test_case_study.py tests/test_artifact_contract.py tests/test_config.py -v
 
 setup:
 	python3 bootstrap.py
