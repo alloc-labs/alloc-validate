@@ -36,5 +36,30 @@
   },
   "full": {
     "keys": ["ghost"]
+  },
+  "phase_timing": {
+    "comment": "Present only when CUDA events are available (GPU training)",
+    "paths": [
+      "probe.has_phase_timing",
+      "probe.phase_forward_ms_p50",
+      "probe.phase_forward_ms_p90",
+      "probe.phase_backward_ms_p50",
+      "probe.phase_backward_ms_p90",
+      "probe.phase_optimizer_ms_p50",
+      "probe.phase_optimizer_ms_p90",
+      "probe.phase_dataloader_ms_p50",
+      "probe.phase_dataloader_ms_p90"
+    ],
+    "types": {
+      "probe.has_phase_timing": "boolean",
+      "probe.phase_forward_ms_p50": "number",
+      "probe.phase_forward_ms_p90": "number",
+      "probe.phase_backward_ms_p50": "number",
+      "probe.phase_backward_ms_p90": "number",
+      "probe.phase_optimizer_ms_p50": "number",
+      "probe.phase_optimizer_ms_p90": "number",
+      "probe.phase_dataloader_ms_p50": "number",
+      "probe.phase_dataloader_ms_p90": "number"
+    }
   }
 }

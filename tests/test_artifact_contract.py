@@ -51,5 +51,5 @@ class TestCheckArtifactScript:
     def test_script_parseable(self) -> None:
         """check_artifact.py should be valid Python."""
         script = ROOT / "scripts" / "check_artifact.py"
-        import py_compile
-        py_compile.compile(str(script), doraise=True)
+        source = script.read_text(encoding="utf-8")
+        compile(source, str(script), "exec")

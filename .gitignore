@@ -1,6 +1,14 @@
 # Internal docs (never commit)
 CLAUDE.md
 TODO.md
+CLAUDE.md.b64
+CLAUDE_WORK_CONTEXT.md
+
+# Founder/private working context (keep local only)
+.private/
+private/
+*.local.md
+*.private.md
 
 # alloc-validate workload outputs
 data/

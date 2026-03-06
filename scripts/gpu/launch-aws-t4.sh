@@ -20,10 +20,8 @@ INSTANCE_TYPE="g4dn.xlarge"
 AMI_ID="${AWS_AMI_ID:-ami-0a0e5d9c7acc336f1}"  # Ubuntu 22.04 (us-east-1)
 KEY_NAME="${AWS_KEY_NAME:-}"
 REGION="${AWS_REGION:-us-east-1}"
-ALLOC_TOKEN="${ALLOC_TOKEN:-}"
-
-if [ -z "$ALLOC_TOKEN" ]; then
-    echo "WARN: ALLOC_TOKEN not set — will run free-tier only"
+if [ -n "${ALLOC_TOKEN:-}" ]; then
+    echo "INFO: ALLOC_TOKEN is intentionally ignored by this launcher to avoid leaking credentials in EC2 user-data."
 fi
 
 # Build the user-data script that runs on boot
@@ -53,17 +51,9 @@ python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.
 USERDATA
 )
 
-# Append token if set
-if [ -n "$ALLOC_TOKEN" ]; then
-    USER_DATA+="
-export ALLOC_TOKEN='$ALLOC_TOKEN'
-make validate-full
-"
-else
-    USER_DATA+="
+USER_DATA+="
 make validate-free
 "
-fi
 
 USER_DATA+='
 make matrix-quick
@@ -110,6 +100,10 @@ echo ""
 echo "To view logs (if you have a key pair):"
 echo "  IP=\$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)"
 echo "  ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@\$IP 'tail -f /var/log/alloc-validate.log'"
+echo ""
+echo "Optional (secure) full validation after SSH:"
+echo "  1) ssh into instance and run: cd /tmp/alloc-validate && source .venv/bin/activate"
+echo "  2) export ALLOC_TOKEN=<token> && make validate-full"
 echo ""
 echo "To terminate early:"
 echo "  aws ec2 terminate-instances --instance-ids $INSTANCE_ID"

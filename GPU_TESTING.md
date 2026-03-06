@@ -2,6 +2,14 @@
 
 Running alloc-validate on real GPUs to fine-tune analysis accuracy, verify VRAM estimates, and validate bottleneck classification on actual hardware.
 
+If you are preparing for a focused test day, run [GCP_ONBOARDING.md](GCP_ONBOARDING.md) first for ordered lanes and pass/fail expectations.
+
+If you have a workstation with 2x L4, use [LOCAL_DUAL_L4_TESTING.md](LOCAL_DUAL_L4_TESTING.md) first and run:
+
+```bash
+make dual-l4-stress
+```
+
 ## Why GPU Tests Matter
 
 CPU-only CI proves the contract (artifact structure, callback integration, CLI correctness). GPU tests prove the **product** (VRAM estimates match reality, bottleneck classification is accurate, GPU recommendations are sensible, timing metrics are meaningful).
@@ -58,8 +66,10 @@ make validate-free
 make matrix
 
 # 6. Multi-GPU matrix (on 4-GPU instances)
-make matrix --include-multi-gpu
+make matrix-multi
 ```
+
+Note: Cloud launcher scripts intentionally run `validate-free` only. They do not inject `ALLOC_TOKEN` into startup/user-data metadata. If you want `validate-full`, SSH in and set `ALLOC_TOKEN` on the instance manually.
 
 ## What to Look For in GPU Results
 
@@ -257,7 +267,7 @@ jobs:
       - run: make validate-full
         env:
           ALLOC_TOKEN: ${{ secrets.ALLOC_TOKEN }}
-      - run: make matrix --include-multi-gpu
+      - run: make matrix-multi
 ```
 
 Self-hosted runners on a preemptible instance keep nightly costs at ~$0.50/day. Alternatively, use [Cirun](https://cirun.io) or [RunsOn](https://runs-on.com) for on-demand GPU runners without managing infrastructure.

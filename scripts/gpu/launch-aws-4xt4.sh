@@ -21,10 +21,8 @@ INSTANCE_TYPE="g4dn.12xlarge"
 AMI_ID="${AWS_AMI_ID:-ami-0a0e5d9c7acc336f1}"  # Ubuntu 22.04 (us-east-1)
 KEY_NAME="${AWS_KEY_NAME:-}"
 REGION="${AWS_REGION:-us-east-1}"
-ALLOC_TOKEN="${ALLOC_TOKEN:-}"
-
-if [ -z "$ALLOC_TOKEN" ]; then
-    echo "WARN: ALLOC_TOKEN not set — will run free-tier only"
+if [ -n "${ALLOC_TOKEN:-}" ]; then
+    echo "INFO: ALLOC_TOKEN is intentionally ignored by this launcher to avoid leaking credentials in EC2 user-data."
 fi
 
 # Build the user-data script that runs on boot
@@ -60,20 +58,13 @@ for i in range(n):
 USERDATA
 )
 
-if [ -n "$ALLOC_TOKEN" ]; then
-    USER_DATA+="
-export ALLOC_TOKEN='$ALLOC_TOKEN'
-make validate-full
-"
-else
-    USER_DATA+="
+USER_DATA+="
 make validate-free
 "
-fi
 
 USER_DATA+='
 # Full matrix with multi-GPU variations
-make matrix --include-multi-gpu
+make matrix-multi
 
 echo "=== alloc-validate multi-GPU test complete ==="
 date
@@ -111,6 +102,10 @@ echo "The instance will auto-terminate after tests complete."
 echo ""
 echo "To check progress:"
 echo "  aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].State.Name'"
+echo ""
+echo "Optional (secure) full validation after SSH:"
+echo "  1) ssh into instance and run: cd /tmp/alloc-validate && source .venv/bin/activate"
+echo "  2) export ALLOC_TOKEN=<token> && make validate-full"
 echo ""
 echo "To terminate early:"
 echo "  aws ec2 terminate-instances --instance-ids $INSTANCE_ID"

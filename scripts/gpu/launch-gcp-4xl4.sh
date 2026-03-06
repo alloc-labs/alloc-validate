@@ -25,11 +25,10 @@ ZONE="${GCP_ZONE:-us-central1-a}"
 MACHINE_TYPE="g2-standard-48"
 IMAGE_FAMILY="common-cu128-ubuntu-2204-nvidia-570"
 IMAGE_PROJECT="deeplearning-platform-release"
-ALLOC_TOKEN="${ALLOC_TOKEN:-}"
 ON_DEMAND="${GCP_ON_DEMAND:-}"
 
-if [ -z "$ALLOC_TOKEN" ]; then
-    echo "WARN: ALLOC_TOKEN not set — will run free-tier only"
+if [ -n "${ALLOC_TOKEN:-}" ]; then
+    echo "INFO: ALLOC_TOKEN is intentionally ignored by this launcher to avoid leaking credentials in startup metadata."
 fi
 
 STARTUP_SCRIPT=$(cat <<'STARTUP'
@@ -61,20 +60,13 @@ for i in range(n):
 STARTUP
 )
 
-if [ -n "$ALLOC_TOKEN" ]; then
-    STARTUP_SCRIPT+="
-export ALLOC_TOKEN='$ALLOC_TOKEN'
-make validate-full
-"
-else
-    STARTUP_SCRIPT+="
+STARTUP_SCRIPT+="
 make validate-free
 "
-fi
 
 STARTUP_SCRIPT+='
 # Full matrix with multi-GPU variations
-make matrix --include-multi-gpu
+make matrix-multi
 
 echo "=== alloc-validate multi-GPU test complete ==="
 date
@@ -122,6 +114,11 @@ echo "The instance will auto-delete after tests complete."
 echo ""
 echo "To check progress:"
 echo "  gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command 'tail -f /var/log/alloc-validate.log'"
+echo ""
+echo "Optional (secure) full validation after SSH:"
+echo "  1) gcloud compute ssh $INSTANCE_NAME --zone=$ZONE"
+echo "  2) cd /tmp/alloc-validate && source .venv/bin/activate"
+echo "  3) export ALLOC_TOKEN=<token> && make validate-full"
 echo ""
 echo "To delete early:"
 echo "  gcloud compute instances delete $INSTANCE_NAME --zone=$ZONE --quiet"

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """alloc-validate setup script.
 
-Creates a venv, installs all dependencies, verifies the installation,
-detects local GPUs, and optionally bootstraps GCP for remote GPU testing.
+Creates a reproducible Python environment, installs all dependencies, verifies
+the installation, detects local GPUs, and optionally bootstraps GCP for remote
+GPU testing.
 
 Usage:
-    python3 bootstrap.py              # install deps + detect GPUs
-    python3 bootstrap.py --gcp        # also set up GCP auth + quota check
+    python3 bootstrap.py                    # auto-select Python, install deps
+    python3 bootstrap.py --python python3.10
+    python3 bootstrap.py --gcp              # also set up GCP auth + quota check
 """
 import argparse
 import json
@@ -15,6 +17,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 # --- ANSI colors (same palette as setup-gcp.sh) ---
 
@@ -30,6 +33,15 @@ VENV_BIN = VENV_DIR / "bin"
 VENV_PIP = VENV_BIN / "pip"
 VENV_PYTHON = VENV_BIN / "python"
 VENV_ALLOC = VENV_BIN / "alloc"
+MIN_PYTHON = (3, 9)
+PYTHON_CANDIDATES = (
+    "python3.12",
+    "python3.11",
+    "python3.10",
+    "python3.9",
+    "python3",
+    "python",
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -59,43 +71,193 @@ def run(cmd, **kwargs):
 # ------------------------------------------------------------------
 
 
-def check_python():
-    v = sys.version_info
-    if v < (3, 9):
-        # Try to find a suitable Python and re-exec
-        for candidate in ("python3.12", "python3.11", "python3.10", "python3.9"):
-            path = shutil.which(candidate)
-            if path:
-                print("  Found %s, re-launching..." % candidate)
-                os.execv(path, [path] + sys.argv)
-        # No suitable Python found
-        fail("Python 3.9+ required, got %d.%d.%d" % (v.major, v.minor, v.micro))
-        print("  Install Python 3.9+ or use Docker instead:")
-        print("    make docker-build && make docker-test")
+def _resolve_python(binary: str) -> Optional[str]:
+    """Resolve a Python executable from PATH or absolute path."""
+    p = Path(binary)
+    if p.is_absolute() and p.exists():
+        return str(p)
+    return shutil.which(binary)
+
+
+def _probe_python(python_bin: str) -> Optional[dict]:
+    """Return version/ssl probe for an interpreter, or None if unusable."""
+    code = (
+        "import json, sys\n"
+        "ssl_ok = True\n"
+        "try:\n"
+        "    import ssl  # noqa: F401\n"
+        "except Exception:\n"
+        "    ssl_ok = False\n"
+        "print(json.dumps({"
+        "'major': sys.version_info[0], "
+        "'minor': sys.version_info[1], "
+        "'micro': sys.version_info[2], "
+        "'ssl_ok': ssl_ok"
+        "}))"
+    )
+    result = run([python_bin, "-c", code])
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout.strip())
+    except json.JSONDecodeError:
+        return None
+
+
+def _python_is_supported(probe: Optional[dict]) -> bool:
+    if not probe:
+        return False
+    version_ok = (probe["major"], probe["minor"]) >= MIN_PYTHON
+    return version_ok and bool(probe.get("ssl_ok"))
+
+
+def _reexec_with(python_bin: str) -> None:
+    """Re-launch bootstrap with a different interpreter."""
+    print(f"  Using interpreter: {python_bin}")
+    os.execv(python_bin, [python_bin] + sys.argv)
+
+
+def check_python(requested_python: Optional[str]) -> None:
+    """Ensure we run under a supported interpreter (>=3.9 + SSL)."""
+    current = str(Path(sys.executable).resolve())
+    current_probe = _probe_python(current)
+
+    # Optional override path from flag or env.
+    override = requested_python or os.environ.get("ALLOC_VALIDATE_PYTHON")
+    if override:
+        override_path = _resolve_python(override)
+        if not override_path:
+            fail(f"Requested interpreter not found: {override}")
+            print("  Tip: use an absolute path or install the requested Python.")
+            sys.exit(1)
+        override_probe = _probe_python(override_path)
+        if not _python_is_supported(override_probe):
+            if override_probe:
+                fail(
+                    "Requested interpreter is unsupported: "
+                    f"{override_probe['major']}.{override_probe['minor']}.{override_probe['micro']} "
+                    f"(ssl_ok={override_probe['ssl_ok']})"
+                )
+            else:
+                fail(f"Requested interpreter is not runnable: {override_path}")
+            print("  Need Python 3.9+ with SSL support enabled.")
+            sys.exit(1)
+
+        if Path(override_path).resolve() != Path(current):
+            _reexec_with(override_path)
+        return
+
+    # Current interpreter already good.
+    if _python_is_supported(current_probe):
+        return
+
+    # Auto-find a better interpreter and re-exec.
+    for candidate in PYTHON_CANDIDATES:
+        path = _resolve_python(candidate)
+        if not path:
+            continue
+        if Path(path).resolve() == Path(current):
+            continue
+        probe = _probe_python(path)
+        if _python_is_supported(probe):
+            print(
+                "  Current Python is unsupported, re-launching with "
+                f"{candidate} ({probe['major']}.{probe['minor']}.{probe['micro']})..."
+            )
+            _reexec_with(path)
+
+    # No suitable Python found.
+    if current_probe:
+        fail(
+            "Python 3.9+ with SSL support required, got "
+            f"{current_probe['major']}.{current_probe['minor']}.{current_probe['micro']} "
+            f"(ssl_ok={current_probe['ssl_ok']})"
+        )
+    else:
+        fail(f"Could not probe current interpreter: {current}")
+    print("  Install Python 3.9+ (or pyenv) and retry.")
+    print("  Example: pyenv install 3.10.12 && pyenv local 3.10.12")
+    print("  Or override interpreter explicitly:")
+    print("    python3 bootstrap.py --python python3.10")
+    sys.exit(1)
+
+
+def _venv_is_healthy() -> bool:
+    """A healthy venv has python + pip available."""
+    if not VENV_PYTHON.exists():
+        return False
+    pip_check = run([str(VENV_PYTHON), "-m", "pip", "--version"])
+    return pip_check.returncode == 0
+
+
+def _create_venv_with_virtualenv() -> None:
+    """Fallback for environments missing ensurepip/python-venv."""
+    pip_check = run([sys.executable, "-m", "pip", "--version"])
+    if pip_check.returncode != 0:
+        fail("Current Python lacks pip; cannot install virtualenv fallback.")
+        print("  Install pip for this interpreter and retry.")
+        print("  Ubuntu/Debian: sudo apt-get install -y python3-pip")
+        sys.exit(1)
+
+    install_virtualenv = run(
+        [sys.executable, "-m", "pip", "install", "--user", "virtualenv"],
+    )
+    if install_virtualenv.returncode != 0:
+        fail("Failed to install virtualenv fallback.")
+        print(install_virtualenv.stderr[-2000:] if install_virtualenv.stderr else "")
+        sys.exit(1)
+
+    create = run([sys.executable, "-m", "virtualenv", str(VENV_DIR)])
+    if create.returncode != 0:
+        fail("virtualenv fallback failed to create .venv")
+        print(create.stderr[-2000:] if create.stderr else "")
         sys.exit(1)
 
 
 def create_venv(total: int) -> None:
     header(1, total, "Creating virtual environment...")
-    if VENV_PYTHON.exists():
-        # Verify the venv is functional
-        r = run([str(VENV_PYTHON), "-c", "import sys; print(sys.prefix)"])
-        if r.returncode == 0:
-            ok(f"{VENV_DIR} (already exists)")
-            return
+    if _venv_is_healthy():
+        ok(f"{VENV_DIR} (already exists)")
+        return
+
+    if VENV_DIR.exists():
         warn(f"{VENV_DIR} exists but is broken — recreating")
         shutil.rmtree(VENV_DIR)
 
     import venv
-    venv.create(str(VENV_DIR), with_pip=True)
-    ok(str(VENV_DIR))
+    try:
+        venv.create(str(VENV_DIR), with_pip=True)
+    except Exception as exc:
+        warn(f"stdlib venv creation failed ({exc.__class__.__name__}); trying virtualenv fallback")
+        _create_venv_with_virtualenv()
+
+    if not _venv_is_healthy():
+        warn("venv exists but pip is missing; trying virtualenv fallback")
+        if VENV_DIR.exists():
+            shutil.rmtree(VENV_DIR)
+        _create_venv_with_virtualenv()
+
+    if not _venv_is_healthy():
+        fail("Virtual environment creation failed (pip unavailable in .venv)")
+        sys.exit(1)
+
+    ok(f"{VENV_DIR} (python={sys.version_info.major}.{sys.version_info.minor})")
 
 
 def install_deps(total: int) -> None:
     header(2, total, "Installing dependencies...")
 
+    prep = run(
+        [str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
+        cwd=str(SCRIPT_DIR),
+    )
+    if prep.returncode != 0:
+        fail("pip bootstrap failed")
+        print(prep.stderr[-2000:] if len(prep.stderr) > 2000 else prep.stderr)
+        sys.exit(1)
+
     r = run(
-        [str(VENV_PIP), "install", "-e", ".[all]"],
+        [str(VENV_PYTHON), "-m", "pip", "install", "-e", ".[all]"],
         cwd=str(SCRIPT_DIR),
     )
     if r.returncode != 0:
@@ -233,13 +395,17 @@ def print_summary(gpu_count: int, gcp: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Set up alloc-validate environment")
     parser.add_argument(
+        "--python",
+        help="Python interpreter to use (e.g. python3.10 or /usr/bin/python3.10)",
+    )
+    parser.add_argument(
         "--gcp", action="store_true",
         help="Also set up GCP authentication and check GPU quota",
     )
     args = parser.parse_args()
 
     os.chdir(SCRIPT_DIR)
-    check_python()
+    check_python(args.python)
 
     total = 4
 

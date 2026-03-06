@@ -6,32 +6,50 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# Resolve alloc and python from the same venv as the running pytest
+_VENV_BIN = Path(sys.executable).parent
+_ALLOC_BIN = str(_VENV_BIN / "alloc")
+_PYTHON_BIN = str(_VENV_BIN / "python")
 
-def run_alloc(*args: str, cwd: str | Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess:
+
+def run_alloc(
+    *args: str,
+    cwd: str | Path | None = None,
+    timeout: int = 120,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Run an alloc CLI command and return the CompletedProcess."""
     return subprocess.run(
-        ["alloc", *args],
+        [_ALLOC_BIN, *args],
         capture_output=True,
         text=True,
         cwd=cwd or ROOT,
         timeout=timeout,
+        env=env,
     )
 
 
-def run_python(*args: str, cwd: str | Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess:
+def run_python(
+    *args: str,
+    cwd: str | Path | None = None,
+    timeout: int = 120,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Run a python command and return the CompletedProcess."""
     return subprocess.run(
-        ["python", *args],
+        [_PYTHON_BIN, *args],
         capture_output=True,
         text=True,
         cwd=cwd or ROOT,
         timeout=timeout,
+        env=env,
     )
 
 

@@ -14,7 +14,20 @@ source .venv/bin/activate
 alloc run -- python pytorch/train.py
 ```
 
-The bootstrap script auto-detects Python 3.9+ (even if `python3` points to an older version). If no suitable Python is found, use Docker instead:
+Bootstrap behavior is deterministic and repeatable across machines:
+- auto-selects a working Python 3.9+ interpreter with SSL support
+- creates `.venv` with stdlib `venv` and falls back to `virtualenv` if `ensurepip` is unavailable
+- installs `alloc-validate` dependencies in editable mode
+
+If you need a specific interpreter (recommended for workstations/CI), pin it explicitly:
+
+```bash
+python3 bootstrap.py --python python3.10
+# or
+ALLOC_VALIDATE_PYTHON=python3.10 python3 bootstrap.py
+```
+
+If no suitable Python is found, use Docker instead:
 
 ```bash
 make docker-build && make docker-test
@@ -23,6 +36,8 @@ make docker-build && make docker-test
 The `alloc run` command wraps a training script and produces an `alloc_artifact.json.gz` containing GPU metrics, hardware context, and VRAM usage.
 
 **Without login**, results are local only — you'll see a summary in the terminal and an artifact file on disk. To see your runs on the [Alloc dashboard](https://www.alloclabs.com) with analysis, right-sizing suggestions, and cost savings, see [Authentication & Dashboard](#authentication--dashboard).
+
+For private founder notes or internal context, use `.private/` (git-ignored by default).
 
 ## What You Can Try
 
@@ -68,7 +83,7 @@ alloc ghost pytorch/train.py --verbose
 
 ### Compare GPU configurations (`alloc scan`)
 
-Query which GPUs fit your workload, with cost and strategy feasibility. Requires authentication (see below).
+Query which GPUs fit your workload, with cost and strategy feasibility. Works without login (`/scans/cli` path); login unlocks org-aware and Pro-gated enrichments.
 
 ```bash
 alloc scan --model llama-3-8b --gpu A100-80GB --num-gpus 4
@@ -117,7 +132,7 @@ The quickstart commands work on CPU and produce a valid artifact, but GPU metric
 | **CPU only** | Valid artifact structure, but GPU metrics are zeros. Good for trying the CLI. |
 | **GPU** | Real peak VRAM (MB), GPU utilization (%), power draw (W), hardware detection. |
 | **GPU + callbacks** (HF/Lightning) | All of the above, plus step timing p50/p90, throughput (samples/sec), dataloader wait %. |
-| **GPU + login** | All of the above, auto-uploaded to the [Alloc dashboard](https://www.alloclabs.com) for analysis and right-sizing. |
+| **GPU + login** | All of the above. Add `--upload` (or `ALLOC_UPLOAD=1`) to send artifacts to the [Alloc dashboard](https://www.alloclabs.com) for analysis and right-sizing. |
 
 ### Local NVIDIA GPU
 
@@ -134,6 +149,19 @@ Verify your GPU is detected:
 ```bash
 python -c "import torch; print(torch.cuda.get_device_name(0))"
 ```
+
+### Local Dual-L4 Workstation (Recommended Before Cloud)
+
+If your machine already has 2x L4 GPUs, run the local stress lane first to validate alloc end-to-end with zero cloud spend:
+
+```bash
+make dual-l4-stress
+```
+
+This runs calibrated + full monitoring paths across DDP/FSDP and callback workloads using `alloc` CLI, then validates artifact schemas.
+It also includes a high-pressure lane (expected OOM or very high VRAM) to validate low-memory behavior.
+
+See [LOCAL_DUAL_L4_TESTING.md](LOCAL_DUAL_L4_TESTING.md) for the full runbook and expected outcomes.
 
 ### Cloud GPU via GCP
 
@@ -154,6 +182,8 @@ bash scripts/gpu/launch-gcp-l4.sh       # 1x L4 (24 GB VRAM, ~$0.21/hr spot)
 ```
 
 The instance clones this repo, installs dependencies, runs the validation suite, and **auto-deletes** when done.
+
+Security note: launch scripts do not inject `ALLOC_TOKEN` into cloud startup metadata. They run free-tier validation by default; run `make validate-full` manually after SSH if needed.
 
 **Step 3 — Check progress:**
 
@@ -178,16 +208,23 @@ For distributed strategy validation (DDP, FSDP, TP, PP) and cost tables across i
 
 ## Authentication & Dashboard
 
-Everything above works without authentication — results stay local. To see your runs on the dashboard with analysis, right-sizing suggestions, and cost savings, log in:
+Everything above works without authentication and keeps results local.
+To send runs to dashboard analysis, authenticate and upload explicitly:
 
 ```bash
-alloc login --browser                    # opens browser for Google/Microsoft sign-in
-alloc run -- python pytorch/train.py     # auto-uploads when logged in
+alloc login --browser
+alloc run --upload -- python pytorch/train.py
 ```
 
-Once logged in, every `alloc run` automatically uploads the artifact. Your runs appear at [alloclabs.com](https://www.alloclabs.com) with GPU utilization, VRAM breakdown, bottleneck diagnosis, right-sizing recommendations, and cost analysis.
+`alloc run` is privacy-first and does not upload unless `--upload` (or `ALLOC_UPLOAD=1`) is set.
 
-Use `--no-upload` to skip auto-upload for a specific run, or `alloc upload <artifact>` to upload a previous artifact manually.
+For the step-by-step GPU test plan with expected outcomes, follow [GCP_ONBOARDING.md](GCP_ONBOARDING.md).
+
+To upload an existing artifact manually:
+
+```bash
+alloc upload pytorch/alloc_artifact.json.gz
+```
 
 ## Available Workloads
 
@@ -218,7 +255,9 @@ mypy scripts/
 
 **PR CI (CPU-only):** `make validate-free` runs all workloads without `ALLOC_TOKEN`. Validates artifact contract (top-level keys, nested paths, types, non-null checks).
 
-**Nightly (GPU):** `make validate-full` runs on GPU with `ALLOC_TOKEN`. Validates real GPU metrics, ingest, analysis, and bottleneck classification.
+**Nightly (GPU):** `make validate-full` runs authenticated GPU workloads with `ALLOC_TOKEN` and validates runtime behavior.
+
+For explicit upload + ingest checks, run `make validate-upload` in the same session.
 
 ### Make Targets Reference
 
@@ -237,6 +276,7 @@ mypy scripts/
 | `make validate-upload` | Upload + analysis pipeline (requires `ALLOC_TOKEN`) |
 | `make matrix` | Full model/GPU variation matrix |
 | `make matrix-quick` | 1 model per framework (smoke test) |
+| `make dual-l4-stress` | Local workstation stress test for dual-L4 GPUs |
 | `make docker-build` | Build Docker image |
 | `make docker-test` | Run free-tier validation in Docker |
 | `make test` | Run full pytest suite |
@@ -260,7 +300,7 @@ alloc-validate/
 │   ├── test_ghost.py           # alloc ghost on scan-only targets
 │   ├── test_run.py             # alloc run on each framework
 │   ├── test_callbacks.py       # Callback-only artifact generation
-│   ├── test_scan.py            # alloc scan (requires ALLOC_TOKEN)
+│   ├── test_scan.py            # alloc scan (unauthenticated + token-enhanced paths)
 │   ├── test_artifact_contract.py  # Schema validation
 │   └── test_config.py          # .alloc.yaml + catalog
 ├── diagnose-targets/           # Scripts designed to trigger specific rules (new)
