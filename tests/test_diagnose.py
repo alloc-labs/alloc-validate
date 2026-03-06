@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 
 import pytest
@@ -47,7 +48,16 @@ class TestDiagnoseRuleTriggers:
         assert "DIST005" in ids, f"Expected DIST005, got {ids}"
 
     def test_clean_script_zero_findings(self) -> None:
-        r = run_alloc("diagnose", str(DIAGNOSE_TARGETS / "clean_script.py"), "--json", "--no-artifact")
+        env = os.environ.copy()
+        # Keep this target deterministic across GPU-rich hosts.
+        env["CUDA_VISIBLE_DEVICES"] = "0"
+        r = run_alloc(
+            "diagnose",
+            str(DIAGNOSE_TARGETS / "clean_script.py"),
+            "--json",
+            "--no-artifact",
+            env=env,
+        )
         data = parse_diagnose_json(r)
         assert len(data["findings"]) == 0, (
             f"Expected 0 findings on clean_script.py, got: "

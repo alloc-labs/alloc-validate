@@ -227,7 +227,7 @@ def create_venv(total: int) -> None:
     import venv
     try:
         venv.create(str(VENV_DIR), with_pip=True)
-    except Exception as exc:
+    except BaseException as exc:
         warn(f"stdlib venv creation failed ({exc.__class__.__name__}); trying virtualenv fallback")
         _create_venv_with_virtualenv()
 
