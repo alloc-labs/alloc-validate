@@ -19,6 +19,15 @@ _ALLOC_BIN = str(_VENV_BIN / "alloc")
 _PYTHON_BIN = str(_VENV_BIN / "python")
 
 
+def _merged_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Deterministic subprocess environment for CLI tests."""
+    base = os.environ.copy()
+    base["NO_COLOR"] = "1"
+    if extra:
+        base.update(extra)
+    return base
+
+
 def run_alloc(
     *args: str,
     cwd: str | Path | None = None,
@@ -32,7 +41,7 @@ def run_alloc(
         text=True,
         cwd=cwd or ROOT,
         timeout=timeout,
-        env=env,
+        env=_merged_env(env),
     )
 
 
@@ -49,7 +58,7 @@ def run_python(
         text=True,
         cwd=cwd or ROOT,
         timeout=timeout,
-        env=env,
+        env=_merged_env(env),
     )
 
 

@@ -293,6 +293,17 @@ def _pkg_version(pkg):
     return None
 
 
+def _runtime_alloc_version() -> Optional[str]:
+    """Return the runtime alloc version from the imported module."""
+    r = run([
+        str(VENV_PYTHON), "-c",
+        "import alloc; print(alloc.__version__)",
+    ])
+    if r.returncode == 0:
+        return r.stdout.strip()
+    return None
+
+
 def _parse_version_tuple(version: str) -> Optional[tuple]:
     """Parse semantic-like versions into a comparable tuple."""
     parts = re.findall(r"\d+", version)
@@ -307,20 +318,27 @@ def _parse_version_tuple(version: str) -> Optional[tuple]:
 def verify_install(total: int) -> None:
     header(3, total, "Verifying installation...")
 
-    alloc_pkg_ver = _pkg_version("alloc")
-    if not alloc_pkg_ver:
-        fail("alloc package is not installed in .venv")
+    alloc_runtime_ver = _runtime_alloc_version()
+    if not alloc_runtime_ver:
+        fail("alloc package is not importable in .venv")
         print("  Run: .venv/bin/pip install --upgrade 'alloc>=0.0.4'")
         sys.exit(1)
 
-    parsed = _parse_version_tuple(alloc_pkg_ver)
+    parsed = _parse_version_tuple(alloc_runtime_ver)
     if parsed is None or parsed < MIN_ALLOC_VERSION:
-        fail(f"alloc version too old: {alloc_pkg_ver}")
+        fail(f"alloc runtime version too old: {alloc_runtime_ver}")
         print("  Required: alloc>=0.0.4")
         print("  Run: .venv/bin/pip install --upgrade 'alloc>=0.0.4'")
         sys.exit(1)
 
-    ok(f"alloc package version → {alloc_pkg_ver}")
+    ok(f"alloc runtime version → {alloc_runtime_ver}")
+
+    alloc_pkg_ver = _pkg_version("alloc")
+    if alloc_pkg_ver and alloc_pkg_ver != alloc_runtime_ver:
+        warn(
+            "alloc distribution metadata differs from runtime import "
+            f"({alloc_pkg_ver} vs {alloc_runtime_ver})"
+        )
 
     # alloc CLI command sanity
     r = run([str(VENV_ALLOC), "version"])

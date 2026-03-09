@@ -8,7 +8,7 @@ BOOTSTRAP_PYTHON ?= python3
 check-env:
 	@test -x "$(ALLOC_BIN)" || (echo "ERROR: missing $(ALLOC_BIN). Run: python3 -m venv .venv && .venv/bin/pip install -e '.[all]'" && exit 1)
 	@test -x "$(PYTHON_BIN)" || (echo "ERROR: missing $(PYTHON_BIN). Run: python3 -m venv .venv && .venv/bin/pip install -e '.[all]'" && exit 1)
-	@$(PYTHON_BIN) -c "import importlib.metadata,re,sys; v=importlib.metadata.version('alloc'); p=[int(x) for x in re.findall(r'\d+', v)[:3]]; p+=[0]*(3-len(p)); sys.exit(0 if tuple(p)>=(0,0,4) else 1)" || (echo "ERROR: alloc>=0.0.4 required. Run: .venv/bin/pip install --upgrade 'alloc>=0.0.4'" && exit 1)
+	@$(PYTHON_BIN) -c "import alloc,re,sys; v=alloc.__version__; p=[int(x) for x in re.findall(r'\d+', v)[:3]]; p+=[0]*(3-len(p)); sys.exit(0 if tuple(p)>=(0,0,4) else 1)" || (echo "ERROR: alloc>=0.0.4 required at runtime. Run: .venv/bin/pip install --upgrade 'alloc>=0.0.4'" && exit 1)
 
 # Active workloads (have real tests)
 all: pytorch huggingface scan-only lightning ray distributed

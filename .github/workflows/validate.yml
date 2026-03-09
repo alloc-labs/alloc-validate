@@ -9,6 +9,9 @@ on:
     # Nightly at 03:00 UTC — GPU tier (if self-hosted runners available)
     - cron: "0 3 * * *"
 
+env:
+  NO_COLOR: "1"
+
 jobs:
   # PR CI: CPU-only, free tier
   validate:

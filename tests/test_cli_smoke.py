@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import importlib.metadata
 import re
+
+import alloc
 
 from tests.conftest import run_alloc
 
@@ -30,7 +31,7 @@ class TestVersion:
         assert "alloc" in output.lower() or "0." in output
 
     def test_version_meets_minimum(self) -> None:
-        version = importlib.metadata.version("alloc")
+        version = alloc.__version__
         assert _parse_version_tuple(version) >= MIN_ALLOC_VERSION, (
             f"alloc>={'.'.join(map(str, MIN_ALLOC_VERSION))} required, got {version}"
         )
