@@ -26,7 +26,7 @@ def _write_rank_artifact(
 ) -> None:
     """Write a minimal rank artifact for merge testing."""
     data = {
-        "version": "0.0.3",
+        "version": "0.0.4",
         "timestamp": "2026-02-23T12:00:00Z",
         "probe": {
             "peak_vram_mb": peak_vram_mb,

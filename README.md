@@ -15,9 +15,16 @@ alloc run -- python pytorch/train.py
 ```
 
 Bootstrap behavior is deterministic and repeatable across machines:
+- requires `alloc>=0.0.4` (bootstrap/check-env fail fast on older CLI builds)
 - auto-selects a working Python 3.9+ interpreter with SSL support
 - creates `.venv` with stdlib `venv` and falls back to `virtualenv` if `ensurepip` is unavailable
 - installs `alloc-validate` dependencies in editable mode
+
+If your environment already has an older CLI, upgrade explicitly:
+
+```bash
+.venv/bin/pip install --upgrade 'alloc>=0.0.4'
+```
 
 If you need a specific interpreter (recommended for workstations/CI), pin it explicitly:
 

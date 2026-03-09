@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+import importlib.metadata
+import re
+
 from tests.conftest import run_alloc
+
+
+MIN_ALLOC_VERSION = (0, 0, 4)
+
+
+def _parse_version_tuple(version: str) -> tuple[int, int, int]:
+    parts = [int(p) for p in re.findall(r"\d+", version)[:3]]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
 
 
 class TestVersion:
@@ -15,6 +28,12 @@ class TestVersion:
         # stdout or stderr — alloc may print version to either
         output = r.stdout + r.stderr
         assert "alloc" in output.lower() or "0." in output
+
+    def test_version_meets_minimum(self) -> None:
+        version = importlib.metadata.version("alloc")
+        assert _parse_version_tuple(version) >= MIN_ALLOC_VERSION, (
+            f"alloc>={'.'.join(map(str, MIN_ALLOC_VERSION))} required, got {version}"
+        )
 
 
 class TestHelp:

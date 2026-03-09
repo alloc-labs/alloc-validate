@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,7 @@ VENV_PIP = VENV_BIN / "pip"
 VENV_PYTHON = VENV_BIN / "python"
 VENV_ALLOC = VENV_BIN / "alloc"
 MIN_PYTHON = (3, 9)
+MIN_ALLOC_VERSION = (0, 0, 4)
 PYTHON_CANDIDATES = (
     "python3.12",
     "python3.11",
@@ -291,16 +293,43 @@ def _pkg_version(pkg):
     return None
 
 
+def _parse_version_tuple(version: str) -> Optional[tuple]:
+    """Parse semantic-like versions into a comparable tuple."""
+    parts = re.findall(r"\d+", version)
+    if not parts:
+        return None
+    nums = [int(p) for p in parts[:3]]
+    while len(nums) < 3:
+        nums.append(0)
+    return tuple(nums)
+
+
 def verify_install(total: int) -> None:
     header(3, total, "Verifying installation...")
 
-    # alloc version
+    alloc_pkg_ver = _pkg_version("alloc")
+    if not alloc_pkg_ver:
+        fail("alloc package is not installed in .venv")
+        print("  Run: .venv/bin/pip install --upgrade 'alloc>=0.0.4'")
+        sys.exit(1)
+
+    parsed = _parse_version_tuple(alloc_pkg_ver)
+    if parsed is None or parsed < MIN_ALLOC_VERSION:
+        fail(f"alloc version too old: {alloc_pkg_ver}")
+        print("  Required: alloc>=0.0.4")
+        print("  Run: .venv/bin/pip install --upgrade 'alloc>=0.0.4'")
+        sys.exit(1)
+
+    ok(f"alloc package version → {alloc_pkg_ver}")
+
+    # alloc CLI command sanity
     r = run([str(VENV_ALLOC), "version"])
     if r.returncode == 0:
         ver = r.stdout.strip()
-        ok(f"alloc version → {ver}")
+        ok(f"alloc CLI version → {ver}")
     else:
-        warn("alloc version command failed (may still work)")
+        fail("alloc version command failed")
+        sys.exit(1)
 
     # torch import
     r = run([str(VENV_PYTHON), "-c", "import torch"])
