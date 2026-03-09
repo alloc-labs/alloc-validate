@@ -6,6 +6,7 @@ All best practices applied:
   - torch.amp.autocast with bf16 (new API)
   - torch.compile
   - cudnn.benchmark = True
+  - torch.set_float32_matmul_precision("high")
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
 torch.backends.cudnn.benchmark = True
+torch.set_float32_matmul_precision("high")
 
 
 class TinyModel(nn.Module):
