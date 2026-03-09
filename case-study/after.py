@@ -14,6 +14,7 @@ Fixes applied:
   - MEM005: torch.compile (was missing)
   - PREC002: bf16 on Ampere+ (was fp32)
   - THRU001: cudnn.benchmark=True (was missing)
+  - UPG002: torch.set_float32_matmul_precision("high") for TF32-capable GPUs
   - Gradient checkpointing enabled for 7B model
 
 Usage:
@@ -44,6 +45,8 @@ SEQ_LEN = 512
 
 # THRU001: enable cudnn autotuner
 torch.backends.cudnn.benchmark = True
+# UPG002: enable TF32 matmul precision where supported
+torch.set_float32_matmul_precision("high")
 
 
 # ── Dataset ─────────────────────────────────────────────────────────────
