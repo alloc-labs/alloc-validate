@@ -1,4 +1,4 @@
-.PHONY: all check-env setup pytorch huggingface scan-only lightning ray distributed case-study diagnose-targets validate-free validate-full validate-fleet validate-upload validate-topology docker-build docker-test matrix matrix-quick matrix-multi matrix-pytorch matrix-huggingface matrix-scan matrix-distributed eval-recommendations eval-recommendations-full baseline clean setup-gcp test test-diagnose test-callbacks test-quick dual-l4-stress
+.PHONY: all check-env setup pytorch huggingface scan-only lightning ray distributed case-study diagnose-targets validate-free validate-full validate-fleet validate-upload validate-topology docker-build docker-test matrix matrix-quick matrix-multi matrix-pytorch matrix-huggingface matrix-scan matrix-distributed eval-recommendations eval-recommendations-full baseline clean setup-gcp test test-diagnose test-callbacks test-quick test-release-gates dual-l4-stress
 
 VENV_BIN ?= $(CURDIR)/.venv/bin
 ALLOC_BIN ?= $(VENV_BIN)/alloc
@@ -101,6 +101,9 @@ test-callbacks: check-env
 
 test-quick: check-env
 	$(PYTHON_BIN) -m pytest tests/test_cli_smoke.py tests/test_ghost.py tests/test_diagnose.py tests/test_case_study.py tests/test_artifact_contract.py tests/test_config.py tests/test_scan.py tests/test_repo_hygiene.py -v
+
+test-release-gates: check-env
+	ALLOC_VALIDATE_RELEASE_GATES=1 $(PYTHON_BIN) -m pytest tests/test_release_gates.py -v
 
 setup:
 	$(BOOTSTRAP_PYTHON) bootstrap.py
