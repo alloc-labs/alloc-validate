@@ -97,6 +97,28 @@ def _run_ddp_artifact(workdir: Path) -> dict:
     return _load_artifact(_find_artifact(workdir))
 
 
+def _run_fsdp_artifact(workdir: Path):
+    r = run_alloc(
+        "run",
+        "--",
+        sys.executable,
+        "-m",
+        "torch.distributed.run",
+        "--nproc_per_node=2",
+        str(ROOT / "distributed" / "train_fsdp.py"),
+        "--model",
+        "medium",
+        "--batch-size",
+        "8",
+        "--max-steps",
+        "25",
+        cwd=workdir,
+        timeout=420,
+    )
+    assert r.returncode == 0, f"alloc run failed: {r.stdout}\n{r.stderr}"
+    return r, _load_artifact(_find_artifact(workdir))
+
+
 class TestAuthAndScanReleaseGates:
     def test_headless_browser_login_refuses_cleanly(self, tmp_path: Path) -> None:
         env = {
@@ -144,6 +166,23 @@ class TestAuthAndScanReleaseGates:
 
 
 class TestDistributedReleaseGates:
+    @pytest.mark.skipif(_gpu_count() < 1, reason="Requires at least 1 GPU")
+    def test_gpu_run_does_not_leak_alloc_dependency_warnings(self, tmp_path: Path) -> None:
+        r = run_alloc(
+            "run",
+            "--",
+            sys.executable,
+            str(ROOT / "pytorch" / "train.py"),
+            "--model",
+            "small-cnn",
+            cwd=tmp_path,
+            timeout=240,
+        )
+        assert r.returncode == 0, f"alloc run failed: {r.stdout}\n{r.stderr}"
+        combined = f"{r.stdout}\n{r.stderr}"
+        assert "The pynvml package is deprecated" not in combined
+        assert "site-packages/torch/cuda/__init__.py" not in combined
+
     def test_distributed_ghost_returns_structured_unsupported(self) -> None:
         r = run_alloc("ghost", str(ROOT / "distributed" / "train_ddp.py"), "--json", timeout=120)
         assert r.returncode != 0
@@ -164,5 +203,33 @@ class TestDistributedReleaseGates:
         assert probe.get("strategy") == "ddp"
         assert probe.get("dp_degree") == 2
         assert isinstance(probe.get("process_map"), list) and len(probe["process_map"]) >= 2
+        per_gpu = probe.get("per_gpu_peak_vram_mb") or []
+        assert len(per_gpu) >= 2
         per_rank = probe.get("per_rank_peak_vram_mb") or []
         assert len(per_rank) >= 2
+
+    @pytest.mark.skipif(_gpu_count() < 2, reason="Requires at least 2 GPUs")
+    @pytest.mark.skipif(not _torchrun_available(), reason="python -m torch.distributed.run is unavailable")
+    def test_fsdp_artifact_is_not_mislabeled_as_ddp(self, tmp_path: Path) -> None:
+        result, data = _run_fsdp_artifact(tmp_path)
+        probe = data.get("probe", {})
+        strategy = probe.get("strategy")
+
+        if strategy is None:
+            reasons = (
+                probe.get("degradation_reasons")
+                or data.get("degradation_reasons")
+                or data.get("missing_signals")
+                or []
+            )
+            assert reasons, (
+                "FSDP strategy may be unknown, but the artifact must explain the missing "
+                f"topology signal.\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+            )
+            return
+
+        assert strategy == "fsdp", (
+            "Real FSDP runs must not be mislabeled as DDP.\n"
+            f"strategy={strategy!r}, detection_method={probe.get('strategy_detection_method')!r}\n"
+            f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+        )
